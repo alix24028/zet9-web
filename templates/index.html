@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZET 9 - المدقق الفلكي</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; direction: rtl; }
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.header { text-align: center; padding: 20px 0 10px; }
+.header h1 { font-size: 24px; color: #e94560; margin-bottom: 4px; }
+.header p { font-size: 13px; color: #8899aa; }
+.controls { background: #16213e; border-radius: 12px; padding: 18px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.control-group { display: flex; flex-direction: column; gap: 4px; }
+.control-group label { font-size: 12px; color: #8899aa; }
+.control-group input, .control-group select { background: #0f3460; color: #e0e0e0; border: 1px solid #1a3a6a; border-radius: 8px; padding: 8px 12px; font-size: 14px; font-family: inherit; direction: ltr; text-align: left; }
+.control-group select { direction: rtl; text-align: right; cursor: pointer; }
+.control-group input:focus, .control-group select:focus { outline: none; border-color: #e94560; }
+.control-group input[type="date"] { min-width: 150px; }
+.btn { background: #e94560; color: white; border: none; border-radius: 8px; padding: 9px 24px; font-size: 15px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-family: inherit; }
+.btn:hover { background: #d6384d; }
+.btn:disabled { background: #555; cursor: not-allowed; }
+.btn-secondary { background: #1a3a6a; }
+.btn-secondary:hover { background: #244d8a; }
+.actions { display: flex; gap: 8px; margin-right: auto; }
+.status-bar { background: #0f3460; border-radius: 8px; padding: 8px 14px; margin-bottom: 12px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.result { background: #0f3460; border-radius: 12px; padding: 16px; overflow-x: auto; }
+.result pre { font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.6; color: #e0e0e0; white-space: pre-wrap; word-wrap: break-word; direction: ltr; text-align: left; min-height: 200px; }
+.result pre:empty::before { content: 'نتيجة الحساب ستظهر هنا...'; color: #556; }
+.loading { text-align: center; padding: 40px; color: #8899aa; }
+.spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #1a3a6a; border-top-color: #e94560; border-radius: 50%; animation: spin 0.6s linear infinite; margin-left: 8px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none; }
+.font-controls { display: flex; gap: 6px; align-items: center; }
+.font-controls button { background: #1a3a6a; color: #e0e0e0; border: none; border-radius: 4px; width: 28px; height: 28px; cursor: pointer; font-size: 16px; font-weight: bold; }
+.font-controls button:hover { background: #244d8a; }
+@media (max-width: 600px) {
+    .controls { flex-direction: column; }
+    .control-group input { width: 100%; }
+    .actions { margin-right: 0; width: 100%; }
+    .btn { flex: 1; text-align: center; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>ZET 9 - المدقق الفلكي</h1>
+        <p>الموقع: Hofuf (25°22'N, 49°34'E) المنطقة الزمنية: +3</p>
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>تاريخ البداية</label>
+            <input type="date" id="startDate">
+        </div>
+        <div class="control-group" id="endDateGroup" style="display:none">
+            <label>تاريخ النهاية</label>
+            <input type="date" id="endDate">
+        </div>
+        <div class="control-group" id="timeGroup">
+            <label>الوقت (HH:MM)</label>
+            <input type="time" id="time" value="12:00">
+        </div>
+        <div class="control-group">
+            <label>نوع الحساب</label>
+            <select id="mode">
+                <option value="يومي">يومي</option>
+                <option value="شهري">شهري</option>
+                <option value="سنوي">سنوي</option>
+                <option value="مخصص">مخصص</option>
+            </select>
+        </div>
+        <div class="actions">
+            <button class="btn" id="calcBtn" onclick="calculate()">احسب</button>
+            <button class="btn btn-secondary" onclick="copyResult()">نسخ</button>
+            <button class="btn btn-secondary" onclick="clearResult()">مسح</button>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="status">جاهز</span>
+        <div class="font-controls">
+            <button onclick="fontUp()">+</button>
+            <button onclick="fontDown()">-</button>
+        </div>
+    </div>
+
+    <div class="result">
+        <pre id="result"></pre>
+    </div>
+</div>
+
+<script>
+let fontSize = 13;
+const now = new Date();
+const fmtDate = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const fmtTime = d => String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+
+document.getElementById('startDate').value = fmtDate(now);
+document.getElementById('endDate').value = fmtDate(now);
+document.getElementById('time').value = fmtTime(now);
+
+document.getElementById('mode').addEventListener('change', function() {
+    const mode = this.value;
+    const endGroup = document.getElementById('endDateGroup');
+    const timeGroup = document.getElementById('timeGroup');
+    if (mode === 'مخصص') {
+        endGroup.style.display = 'flex';
+        timeGroup.style.display = 'none';
+    } else if (mode === 'يومي') {
+        endGroup.style.display = 'none';
+        timeGroup.style.display = 'flex';
+    } else {
+        endGroup.style.display = 'none';
+        timeGroup.style.display = 'none';
+    }
+});
+
+document.getElementById('startDate').addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+document.getElementById('endDate').addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+document.getElementById('time').addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+
+function setStatus(msg) {
+    document.getElementById('status').textContent = msg;
+}
+
+function calculate() {
+    const btn = document.getElementById('calcBtn');
+    btn.disabled = true;
+    setStatus('جارٍ الحساب...');
+    document.getElementById('result').textContent = 'يرجى الانتظار...';
+
+    const mode = document.getElementById('mode').value;
+    const date = document.getElementById('startDate').value;
+    const time = mode === 'مخصص' ? '12:00' : document.getElementById('time').value;
+    const endDate = mode === 'مخصص' ? document.getElementById('endDate').value : '';
+
+    fetch('/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, time, mode, end_date: endDate })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('result').textContent = data.result;
+            setStatus('اكتمل الحساب');
+        } else {
+            document.getElementById('result').textContent = 'خطأ: ' + data.error;
+            setStatus('حدث خطأ');
+        }
+    })
+    .catch(err => {
+        document.getElementById('result').textContent = 'خطأ في الاتصال: ' + err;
+        setStatus('فشل الاتصال');
+    })
+    .finally(() => {
+        btn.disabled = false;
+    });
+}
+
+function copyResult() {
+    const el = document.getElementById('result');
+    const txt = el.textContent;
+    if (!txt) return;
+    navigator.clipboard.writeText(txt).then(() => {
+        setStatus('تم النسخ إلى الحافظة');
+    }).catch(() => {
+        const range = document.createRange();
+        range.selectNode(el);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        document.execCommand('copy');
+        window.getSelection().removeAllRanges();
+        setStatus('تم النسخ إلى الحافظة');
+    });
+}
+
+function clearResult() {
+    document.getElementById('result').textContent = '';
+    setStatus('جاهز');
+}
+
+let fontTimer;
+function applyFont() {
+    document.getElementById('result').style.fontSize = fontSize + 'px';
+}
+function fontUp() { fontSize = Math.min(fontSize + 2, 32); applyFont(); setStatus('حجم الخط: ' + fontSize); }
+function fontDown() { fontSize = Math.max(fontSize - 2, 6); applyFont(); setStatus('حجم الخط: ' + fontSize); }
+</script>
+</body>
+</html>
